@@ -39,7 +39,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -53,26 +55,15 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.cs407.brickcollector.R
 import com.cs407.brickcollector.models.LegoSet
+import com.cs407.brickcollector.api.ApiService
 
 @Composable
 fun WantListScreen(
     onNavigateToSettings: () -> Unit = {}
 ) {
-    // Variables
-    val itemList = remember {
-        listOf(
-            LegoSet("Castle Set", 1, 49.99),
-            LegoSet("Space Station", 2, 89.99),
-            LegoSet("City Builder", 3, 129.99),
-            LegoSet("Pirate Ship", 4, 159.99),
-            LegoSet("Fire Station", 1, 39.99),
-            LegoSet("Castle Set", 1, 49.99),
-            LegoSet("Space Station", 2, 89.99),
-            LegoSet("City Builder", 3, 129.99),
-            LegoSet("Pirate Ship", 4, 159.99),
-            LegoSet("Fire Station", 1, 39.99)
-        )
-    }
+    // State for the list - fetched from API
+    var itemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
     var activeSearchQuery by remember { mutableStateOf("") }
@@ -96,19 +87,44 @@ fun WantListScreen(
     var harryPotterChecked by remember { mutableStateOf(false) }
     var marvelChecked by remember { mutableStateOf(false) }
 
+    // Initial data fetch
+    LaunchedEffect(Unit) {
+        // TODO: Make this async when backend implements suspend functions
+        itemList = ApiService.getWantList()
+        isLoading = false
+    }
 
-    // Filter the list based on active search query (only when user presses enter)
-    val filteredList = remember(activeSearchQuery, itemList) {
-        if (activeSearchQuery.isBlank()) {
-            itemList
-        } else {
-            itemList.filter { it.name.contains(activeSearchQuery, ignoreCase = true) }
-        }
+    // Function to apply filters and search
+    fun applyFiltersAndSearch() {
+        isLoading = true
+
+        // Build genre list
+        val genres = mutableListOf<String>()
+        if (starWarsChecked) genres.add("Star Wars")
+        if (indianaJonesChecked) genres.add("Indiana Jones")
+        if (harryPotterChecked) genres.add("Harry Potter")
+        if (marvelChecked) genres.add("Marvel")
+
+        // Convert price strings to doubles
+        val minPrice = priceMin.toDoubleOrNull()
+        val maxPrice = priceMax.toDoubleOrNull()
+
+        // Call API with all filters
+        // TODO: Make this async when backend implements suspend functions
+        itemList = ApiService.searchWantList(
+            searchQuery = activeSearchQuery,
+            priceMin = minPrice,
+            priceMax = maxPrice,
+            genres = genres
+        )
+
+        isLoading = false
+        currentPage = 1 // Reset to first page after filtering
     }
 
     // Calculate pagination values
-    val totalPages = remember(filteredList, itemsPerPage) {
-        ((filteredList.size + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
+    val totalPages = remember(itemList, itemsPerPage) {
+        ((itemList.size + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
     }
 
     // Reset to page 1 if current page exceeds total pages
@@ -117,11 +133,11 @@ fun WantListScreen(
     }
 
     // Get items for current page
-    val paginatedList = remember(filteredList, currentPage, itemsPerPage) {
+    val paginatedList = remember(itemList, currentPage, itemsPerPage) {
         val startIndex = (currentPage - 1) * itemsPerPage
-        val endIndex = (startIndex + itemsPerPage).coerceAtMost(filteredList.size)
-        if (startIndex < filteredList.size) {
-            filteredList.subList(startIndex, endIndex)
+        val endIndex = (startIndex + itemsPerPage).coerceAtMost(itemList.size)
+        if (startIndex < itemList.size) {
+            itemList.subList(startIndex, endIndex)
         } else {
             emptyList()
         }
@@ -153,6 +169,7 @@ fun WantListScreen(
                 keyboardActions = KeyboardActions(
                     onSearch = {
                         activeSearchQuery = searchQuery
+                        applyFiltersAndSearch()
                     }
                 )
             )
@@ -393,106 +410,130 @@ fun WantListScreen(
                                     modifier = Modifier.padding(start = 8.dp)
                                 )
                             }
+
+                            // Apply Filters Button
+                            Button(
+                                onClick = { applyFiltersAndSearch() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Apply Filters")
+                            }
                         }
                     }
                 }
             }
 
-            items(paginatedList) { set ->
-                ElevatedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedSet = set },
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row(
+            // Show loading or items
+            if (isLoading) {
+                item {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Image on the left
-                        Image(
-                            painter = painterResource(id = getDrawableId(set.imageId)),
-                            contentDescription = set.name,
-                            modifier = Modifier.size(80.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // Set name
-                        Text(
-                            text = set.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        // Price on the far right
-                        Column(
-                            horizontalAlignment = Alignment.End
+                        Text("Loading...")
+                    }
+                }
+            } else {
+                items(paginatedList) { set ->
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedSet = set },
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Current Price",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            // Image on the left
+                            Image(
+                                painter = painterResource(id = getDrawableId(set.imageId)),
+                                contentDescription = set.name,
+                                modifier = Modifier.size(80.dp)
                             )
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // Set name
                             Text(
-                                text = "$${set.price}",
+                                text = set.name,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                modifier = Modifier.weight(1f)
                             )
+
+                            // Price on the far right
+                            Column(
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text(
+                                    text = "Current Price",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "$${set.price}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // Pagination Controls - scrollable at the bottom
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 24.dp, bottom = 16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Back arrow
-                    IconButton(
-                        onClick = { currentPage-- },
-                        enabled = currentPage > 1
+            if (totalPages > 1) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 24.dp, bottom = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            painter = painterResource(id = android.R.drawable.ic_media_previous),
-                            contentDescription = "Previous Page",
-                            tint = if (currentPage > 1)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        // Back arrow
+                        IconButton(
+                            onClick = { currentPage-- },
+                            enabled = currentPage > 1
+                        ) {
+                            Icon(
+                                painter = painterResource(id = android.R.drawable.ic_media_previous),
+                                contentDescription = "Previous Page",
+                                tint = if (currentPage > 1)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        // Page indicator
+                        Text(
+                            text = "Page $currentPage/$totalPages",
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                    }
 
-                    Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
 
-                    // Page indicator
-                    Text(
-                        text = "Page $currentPage/$totalPages",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Forward arrow
-                    IconButton(
-                        onClick = { currentPage++ },
-                        enabled = currentPage < totalPages
-                    ) {
-                        Icon(
-                            painter = painterResource(id = android.R.drawable.ic_media_next),
-                            contentDescription = "Next Page",
-                            tint = if (currentPage < totalPages)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        )
+                        // Forward arrow
+                        IconButton(
+                            onClick = { currentPage++ },
+                            enabled = currentPage < totalPages
+                        ) {
+                            Icon(
+                                painter = painterResource(id = android.R.drawable.ic_media_next),
+                                contentDescription = "Next Page",
+                                tint = if (currentPage < totalPages)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        }
                     }
                 }
             }
@@ -603,8 +644,15 @@ fun WantListScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        // TODO: Send addSearchQuery to backend SQL
-                        println("Search query to send to backend: $addSearchQuery")
+                        // Call API to search for available sets
+                        val searchResults = ApiService.searchAvailableSets(addSearchQuery)
+                        // TODO: Display search results in a list and let user select one
+                        // For now, just log and add first result if exists
+                        if (searchResults.isNotEmpty()) {
+                            ApiService.addToWantList(searchResults.first())
+                            // Refresh the want list
+                            itemList = ApiService.getWantList()
+                        }
                         showAddDialog = false
                         addSearchQuery = ""
                     }

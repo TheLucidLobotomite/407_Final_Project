@@ -1,5 +1,6 @@
 package com.cs407.brickcollector
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,15 +29,102 @@ import com.cs407.brickcollector.ui.screens.SellScreen
 import com.cs407.brickcollector.ui.screens.SettingsScreen
 import com.cs407.brickcollector.ui.screens.WantListScreen
 
+
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
+import com.cs407.brickcollector.api.BrickEconomyAPI
+import kotlinx.coroutines.launch
+
+import android.util.Log
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+
+
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+
+
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
+
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import com.cs407.brickcollector.api.LegoDatabase
+import com.cs407.brickcollector.api.exampleUsage
+import kotlinx.coroutines.launch
+
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // Check if database file exists in assets
+        try {
+            val assetFiles = assets.list("")
+            Log.d("LegoTest", "Files in assets: ${assetFiles?.joinToString()}")
+
+            val hasDb = assetFiles?.contains("lego_sets.db") ?: false
+            Log.d("LegoTest", "Database in assets: $hasDb")
+        } catch (e: Exception) {
+            Log.e("LegoTest", "Error checking assets: ${e.message}")
+        }
+
+        // Now try to access database
+        val legoDb = LegoDatabase.getInstance(this)
+        val set = legoDb.getSetByUPC("673419266192")
+        Log.d("LegoTest", "Found: ${set?.name ?: "Not found"}")
+
         setContent {
             AppNavigation()
         }
     }
 }
+
+    /*
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        // Call the example usage function
+        lifecycleScope.launch {
+            exampleUsage()
+        }
+
+        setContent {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Testing BrickEconomy API\nCheck Logcat for results",
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+    }
+}
+
+     */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
