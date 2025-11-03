@@ -9,6 +9,13 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+<<<<<<< HEAD
+=======
+
+    }
+    plugins {
+        id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin") version "2.0.1"
+>>>>>>> 5116f58 (adding my device files)
     }
 }
 dependencyResolutionManagement {
@@ -19,6 +26,11 @@ dependencyResolutionManagement {
     }
 }
 
+<<<<<<< HEAD
 rootProject.name = "BrickCollector"
 include(":app")
  
+=======
+rootProject.name = "Location"
+include(":app")
+>>>>>>> 5116f58 (adding my device files)
