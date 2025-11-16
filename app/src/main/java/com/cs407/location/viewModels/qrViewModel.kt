@@ -18,25 +18,25 @@ import kotlinx.coroutines.launch
 
 class qrViewModel : ViewModel() {
 
-    private var _cameraControl: LifecycleCameraController? = null
-    val cameraControl get() = _cameraControl
+    private var _cameraControl = MutableStateFlow<LifecycleCameraController?>(null)
+    val cameraControl = _cameraControl.asStateFlow()
 
     private var _qrResult = MutableStateFlow<String?>(null)
     val qrResult get() = _qrResult.asStateFlow()
 
 
     fun setUpCamera(context: Context) {
-        // 1) Allow all common formats (QR + UPC/EAN for LEGO boxes)
+        // Only set up once
+        if (_cameraControl.value != null) return
         val options = BarcodeScannerOptions.Builder()
             .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
             .build()
 
-        // 2) Use the options when getting the client
         val barcodeScanner = BarcodeScanning.getClient(options)
 
-        // 3) Keep the rest of your existing controller/analyzer setup the same
         val controller = LifecycleCameraController(context).apply {
             setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
+
             setImageAnalysisAnalyzer(
                 ContextCompat.getMainExecutor(context),
                 MlKitAnalyzer(
@@ -51,6 +51,6 @@ class qrViewModel : ViewModel() {
                 }
             )
         }
-        _cameraControl = controller
+        _cameraControl.value = controller
     }
 }

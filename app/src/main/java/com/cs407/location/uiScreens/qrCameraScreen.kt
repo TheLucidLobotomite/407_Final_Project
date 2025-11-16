@@ -5,8 +5,6 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.Camera
-import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,17 +26,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs407.location.viewModels.qrViewModel
 
 @Composable
-
-fun qrCameraScreen(viewModel: qrViewModel = viewModel(),
-        onQrScanned: (String) -> Unit = {}) {
+fun qrCameraScreen(
+    viewModel: qrViewModel = viewModel(),
+    onQrScanned: (String) -> Unit = {}
+) {
     val context = LocalContext.current
     val lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current
-
 
     var hasCamPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
-                context, Manifest.permission.CAMERA
+                context,
+                Manifest.permission.CAMERA
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
@@ -50,31 +49,29 @@ fun qrCameraScreen(viewModel: qrViewModel = viewModel(),
     }
 
     LaunchedEffect(Unit) {
-        if (!hasCamPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!hasCamPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     LaunchedEffect(hasCamPermission) {
-        if (hasCamPermission) viewModel.setUpCamera(context)
+        if (hasCamPermission) {
+            viewModel.setUpCamera(context)
+        }
     }
 
-    val controller: LifecycleCameraController? = viewModel.cameraControl
+    val controller by viewModel.cameraControl.collectAsStateWithLifecycle()
 
     val qr by viewModel.qrResult.collectAsStateWithLifecycle()
 
     LaunchedEffect(qr) {
-        qr?.let {
-            value ->
+        qr?.let { value ->
             Toast.makeText(context, "QR: $value", Toast.LENGTH_SHORT).show()
             onQrScanned(value)
         }
     }
 
-
-    if (controller != null) {
-        // We only need frame analysis for QR scanning
-        controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
-
-
+    if (hasCamPermission && controller != null) {
         AndroidView(
             factory = { ctx ->
                 PreviewView(ctx).apply {
@@ -82,28 +79,17 @@ fun qrCameraScreen(viewModel: qrViewModel = viewModel(),
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
             },
-            update = { pv -> pv.controller = controller },
+            update = { previewView ->
+                previewView.controller = controller
+            },
             modifier = Modifier.fillMaxSize()
         )
 
-//        AndroidView(
-//            factory = { contxt ->
-//                PreviewView(contxt).apply {
-//                    this.controller = controller        // shows the camera feed
-//                    scaleType = PreviewView.ScaleType.FILL_CENTER
-//                }
-//            },
-//            modifier = Modifier.fillMaxSize()
-//        )
-
         DisposableEffect(lifecycleOwner, controller) {
-            controller.bindToLifecycle(lifecycleOwner)
-            onDispose { controller.unbind() }
+            controller?.bindToLifecycle(lifecycleOwner)
+            onDispose {
+                controller?.unbind()
+            }
         }
     }
-
-
-
-
-
 }

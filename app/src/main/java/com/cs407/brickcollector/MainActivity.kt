@@ -1,14 +1,20 @@
 package com.cs407.brickcollector
 
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -18,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -27,14 +34,72 @@ import com.cs407.brickcollector.ui.screens.MySetsScreen
 import com.cs407.brickcollector.ui.screens.SellScreen
 import com.cs407.brickcollector.ui.screens.SettingsScreen
 import com.cs407.brickcollector.ui.screens.WantListScreen
+import com.cs407.location.uiScreens.qrCameraScreen
+import com.cs407.location.viewModels.callLocationVM
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private val vm: callLocationVM by viewModels()
+    private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             AppNavigation()
         }
+
+        permissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { perms ->
+            val granted =
+                perms[android.Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                        perms[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+            vm.updatePermission(granted)
+
+            if (granted) {
+                // We have permission -> resolve city
+                lifecycleScope.launch {
+                    val city = vm.resolveCityAssumingPermission(
+                        appContext = applicationContext,
+                        geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
+                    )
+                    Log.d("CITY", "Resolved city: $city")
+                    Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Location permission denied",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        // 4) Initialize VM with context + API key
+        vm.initialize(applicationContext, BuildConfig.GEOAPIFY_API_KEY)
+
+        // 5) If no permission yet, ask. Otherwise go ahead and resolve.
+        if (!vm.hasLocationPermission(this)) {
+            permissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        } else {
+            vm.updatePermission(true)
+            lifecycleScope.launch {
+                val city = vm.resolveCityAssumingPermission(
+                    appContext = applicationContext,
+                    geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
+                )
+                Log.d("CITY", "Resolved city (already had perm): $city")
+                Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     }
 }
 
@@ -66,9 +131,12 @@ fun AppNavigation() {
                     },
                     actions = {
                         IconButton(onClick = {
-                            // TODO... handle the barcode
+                            navController.navigate("qrScanner")
                         }) {
-                            Icon(Icons.Default.Star, contentDescription = "Scan Barcode")
+                            Icon(
+                                imageVector = Icons.Filled.QrCodeScanner,
+                                contentDescription = "Scan Barcode"
+                            )
                         }
                     }
                 )
@@ -121,6 +189,11 @@ fun AppNavigation() {
                 SettingsScreen(
                     onBack = { navController.popBackStack() }
                 )
+            }
+            composable("qrScanner") {
+                qrCameraScreen { scannedValue ->
+                    navController.popBackStack()
+                }
             }
         }
     }
