@@ -84,7 +84,7 @@ fun BuyScreen(
     var harryPotterChecked by remember { mutableStateOf(false) }
     var marvelChecked by remember { mutableStateOf(false) }
     //hardcoded test for future buy
-    //TODO: Remove once user database working hardcoded for now
+    //TODO: Remove once user database working hardcoded for now look at changes
     LaunchedEffect(Unit) {
         val allSets = ApiService.getAvailableForPurchase()
         itemList = allSets.take(3);
