@@ -64,12 +64,7 @@ fun qrCameraScreen(
 
     val qr by viewModel.qrResult.collectAsStateWithLifecycle()
 
-    LaunchedEffect(qr) {
-        qr?.let { value ->
-            Toast.makeText(context, "QR: $value", Toast.LENGTH_SHORT).show()
-            onQrScanned(value)
-        }
-    }
+
 
     if (hasCamPermission && controller != null) {
         AndroidView(

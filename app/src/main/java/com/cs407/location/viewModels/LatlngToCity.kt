@@ -54,7 +54,8 @@ class LatlngToCity : ViewModel(){
             @Query("lon") lon: Double,
             @Query("apiKey") apiKey: String,
             @Query("limit") limit: Int = 1,
-            @Query("lang") lang: String? = null
+            @Query("lang") lang: String? = null,
+            @Query("format") format: String = "geojson"
         ): GeoapifyResponse
     }
 

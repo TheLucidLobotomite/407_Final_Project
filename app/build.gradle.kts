@@ -2,27 +2,32 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
 }
 
 android {
     namespace = "com.cs407.brickcollector"
     compileSdk = 36
 
-    packaging {
-        resources {
-            excludes += "/META-INF/INDEX.LIST"
-            excludes += "/META-INF/DEPENDENCIES"
-        }
-    }
-
     defaultConfig {
         applicationId = "com.cs407.brickcollector"
-        minSdk = 34
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // GEOAPIFY key -> used by BuildConfig.GEOAPIFY_API_KEY in MainActivity
+        val geoKey = providers.gradleProperty("GEOAPIFY_API_KEY").orNull ?: "DEFAULT_GEOAPIFY"
+        buildConfigField("String", "GEOAPIFY_API_KEY", "\"$geoKey\"")
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/DEPENDENCIES"
+        }
     }
 
     buildTypes {
@@ -34,6 +39,7 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -41,12 +47,24 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
+        buildConfig = true  // <-- makes BuildConfig available
     }
 }
 
+configurations.all {
+    exclude(group = "com.google.guava", module = "listenablefuture")
+}
+
+secrets {
+    // make sure this file exists at: app/secrets.properties
+    defaultPropertiesFileName = "secrets.properties"
+}
+
 dependencies {
+    // Core + Compose
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -55,12 +73,39 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.navigation.compose)
-    // OkHttp for HTTP requests
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(libs.androidx.compiler)
 
-    // Coroutines for async operations
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // Google Play Services (Location + Maps)
+    implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
+
+    // CameraX + MLKit integration
+    val camerax = "1.5.1"
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-view:$camerax")
+    implementation("androidx.camera:camera-mlkit-vision:$camerax")
+
+    // CameraX ML Kit barcode scanning
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.mlkit.vision)
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // Network stack (Retrofit + OkHttp + Gson)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+
+    // Coroutines & lifecycle
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+
+    // Tests
+    implementation("androidx.compose.material:material-icons-extended")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -67,6 +67,7 @@ class callLocationVM(
     suspend fun fetchLatLngOnce(): com.google.android.gms.maps.model.LatLng? {
         return locationVM.getCurrentLocation()
     }
+
     private fun storeAndReturn(value: String): String {
         _city.value = value
         return value
