@@ -1,5 +1,6 @@
 package com.cs407.brickcollector.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,14 +45,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.cs407.brickcollector.BuildConfig
 import com.cs407.brickcollector.R
 import com.cs407.brickcollector.models.LegoSet
 import com.cs407.brickcollector.api.ApiService
+import com.cs407.location.viewModels.LatlngToCity
+import com.google.android.gms.maps.model.LatLng
 
 @Composable
 fun BuyScreen(
@@ -64,11 +70,12 @@ fun BuyScreen(
     var activeSearchQuery by remember { mutableStateOf("") }
     var showFilterWidget by remember { mutableStateOf(false) }
     var selectedSet by remember { mutableStateOf<LegoSet?>(null) }
+    val localContext = LocalContext.current
 
     // Pagination variables
     val itemsPerPage = 7
     var currentPage by remember { mutableStateOf(1) }
-
+    var cardCities by remember { mutableStateOf<List<String?>>(emptyList()) }
     // Filter state variables
     var priceMin by remember { mutableStateOf("") }
     var priceMax by remember { mutableStateOf("") }
@@ -76,11 +83,38 @@ fun BuyScreen(
     var indianaJonesChecked by remember { mutableStateOf(false) }
     var harryPotterChecked by remember { mutableStateOf(false) }
     var marvelChecked by remember { mutableStateOf(false) }
-
-    // Initial data fetch
+    //hardcoded test for future buy
+    //TODO: Remove once user database working hardcoded for now look at changes
     LaunchedEffect(Unit) {
-        // TODO: Make this async when backend implements suspend functions
-        itemList = ApiService.getAvailableForPurchase()
+        val allSets = ApiService.getAvailableForPurchase()
+        itemList = allSets.take(3);
+        val sellerLocation = listOf(
+            LatLng(25.779460, -80.207658),//miami
+            LatLng(43.072083, -89.408118),//madison
+            LatLng(37.327717, -121.889255),//cali
+        )
+        val geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
+        val cityVM = LatlngToCity()
+
+        val resolvedCities = mutableListOf<String?>()
+
+        for (coord in sellerLocation) {
+            Toast.makeText(
+                localContext,
+                "Resolving city for $coord",
+                Toast.LENGTH_SHORT
+            ).show()
+            cityVM.resolveAndStore(coord, apiKey = geoapifyApiKey)
+            Toast.makeText(
+                localContext,
+                "Resolved city: ${cityVM.cityCounty.value}",
+                Toast.LENGTH_SHORT
+            ).show()
+            resolvedCities.add(cityVM.cityCounty.value)  // may be null if it fails
+        }
+
+        cardCities = resolvedCities
+
         isLoading = false
     }
 
@@ -349,13 +383,16 @@ fun BuyScreen(
                     }
                 }
             } else {
-                items(paginatedList) { set ->
+                itemsIndexed(paginatedList) { index,set ->
+                    val cityForCard = cardCities.getOrNull(index)
+
                     ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { selectedSet = set },
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
                     ) {
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -387,6 +424,19 @@ fun BuyScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = if (cityForCard != null)
+                                        "Seller city:  $cityForCard"
+                                    else
+                                        "Seller: No city",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
                                 Text(
                                     text = "$${set.price}",
                                     style = MaterialTheme.typography.titleMedium,

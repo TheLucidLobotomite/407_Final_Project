@@ -1,35 +1,45 @@
 package com.cs407.brickcollector
 
-import android.content.Context
+
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.cs407.brickcollector.api.LegoDatabase
 import com.cs407.brickcollector.ui.screens.BuyScreen
 import com.cs407.brickcollector.ui.screens.MySetsScreen
 import com.cs407.brickcollector.ui.screens.SellScreen
@@ -37,94 +47,9 @@ import com.cs407.brickcollector.ui.screens.SettingsScreen
 import com.cs407.brickcollector.ui.screens.WantListScreen
 import com.cs407.location.uiScreens.qrCameraScreen
 import com.cs407.location.viewModels.callLocationVM
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import com.cs407.brickcollector.api.BrickEconomyAPI
-import kotlinx.coroutines.launch
-
-import android.util.Log
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-
-
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-
-
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.ui.platform.LocalContext
-
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
-import com.cs407.brickcollector.api.LegoDatabase
-import com.cs407.brickcollector.api.exampleUsage
-import kotlinx.coroutines.launch
-
-
-
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import com.cs407.brickcollector.api.BrickEconomyAPI
-import kotlinx.coroutines.launch
-
-import android.util.Log
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-
-
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-
-
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.ui.platform.LocalContext
-
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
-import com.cs407.brickcollector.api.LegoDatabase
-import com.cs407.brickcollector.api.exampleUsage
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 class MainActivity : ComponentActivity() {
@@ -170,6 +95,7 @@ class MainActivity : ComponentActivity() {
                         appContext = applicationContext,
                         geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
                     )
+
                     Log.d("CITY", "Resolved city: $city")
                     Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
                 }
@@ -200,6 +126,8 @@ class MainActivity : ComponentActivity() {
                     appContext = applicationContext,
                     geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
                 )
+                val Latlng = vm.fetchLatLngOnce()
+                Toast.makeText(this@MainActivity, "Latlng: $Latlng", Toast.LENGTH_SHORT).show()
                 Log.d("CITY", "Resolved city (already had perm): $city")
                 Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
             }
@@ -323,8 +251,34 @@ fun AppNavigation() {
                 )
             }
             composable("qrScanner") {
+                val context = LocalContext.current
+                val scope = rememberCoroutineScope()
+
                 qrCameraScreen { scannedValue ->
-                    navController.popBackStack()
+
+                    scope.launch {
+                        // 1) Get DB instance
+                        val legoDb = LegoDatabase.getInstance(context)
+
+                        // 2) Query DB on background thread
+                        val set = withContext(Dispatchers.IO) {
+                            legoDb.getSetByUPC(scannedValue)  // uses the UPC column
+                        }
+
+                        // 3) Build a message to show
+                        val msg = if (set != null) {
+                            "UPC: $scannedValue\nSet: ${set.setNumber} - ${set.name}"
+                        } else {
+                            "No set found for UPC $scannedValue"
+                        }
+
+                        // 4) Log + Toast for testing
+                        Log.d("QR-Lego", msg)
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+
+                        // 5) Go back to previous screen
+                        navController.popBackStack()
+                    }
                 }
             }
         }
