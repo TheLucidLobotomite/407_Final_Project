@@ -143,6 +143,33 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+    /*
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        // Call the example usage function
+        lifecycleScope.launch {
+            exampleUsage()
+        }
+
+        setContent {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Testing BrickEconomy API\nCheck Logcat for results",
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+    }
+}
+
+     */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation() {
@@ -185,6 +212,17 @@ fun AppNavigation() {
                                 imageVector = Icons.Filled.QrCodeScanner,
                                 contentDescription = "Scan Barcode"
                             )
+                        }
+                    }
+                )
+            }
+            /*
+            else {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
 
