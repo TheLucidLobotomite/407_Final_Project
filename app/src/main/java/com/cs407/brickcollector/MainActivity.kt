@@ -27,7 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +58,10 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private val vm: callLocationVM by viewModels()
     private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
+
+    object AppState {
+        var cameraOn = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,33 +143,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-    /*
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        // Call the example usage function
-        lifecycleScope.launch {
-            exampleUsage()
-        }
-
-        setContent {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Testing BrickEconomy API\nCheck Logcat for results",
-                    fontSize = 20.sp,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-        }
-    }
-}
-
-     */
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation() {
@@ -191,7 +171,15 @@ fun AppNavigation() {
                     },
                     actions = {
                         IconButton(onClick = {
-                            navController.navigate("qrScanner")
+                            if (MainActivity.AppState.cameraOn) {
+                                // Camera is on, turn it off by going back
+                                MainActivity.AppState.cameraOn = false
+                                navController.popBackStack()
+                            } else {
+                                // Camera is off, turn it on by navigating to scanner
+                                MainActivity.AppState.cameraOn = true
+                                navController.navigate("qrScanner")
+                            }
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.QrCodeScanner,
@@ -199,20 +187,9 @@ fun AppNavigation() {
                             )
                         }
                     }
+
                 )
             }
-            /*
-            else {
-                TopAppBar(
-                    title = { },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                )
-            }
-            */
         },
         bottomBar = {
             if (showBars) {
@@ -277,6 +254,7 @@ fun AppNavigation() {
                         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
 
                         // 5) Go back to previous screen
+                        MainActivity.AppState.cameraOn = false
                         navController.popBackStack()
                     }
                 }
@@ -302,6 +280,13 @@ fun BottomNavigationBar(
                 label = { Text(item.label) },
                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
                 onClick = {
+                    // If camera is on, turn it off and pop back first
+                    if (MainActivity.AppState.cameraOn) {
+                        MainActivity.AppState.cameraOn = false
+                        navController.popBackStack()
+                    }
+
+                    // Then navigate to the selected item
                     navController.navigate(item.route) {
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
@@ -310,6 +295,7 @@ fun BottomNavigationBar(
                         restoreState = true
                     }
                 }
+
             )
         }
     }
