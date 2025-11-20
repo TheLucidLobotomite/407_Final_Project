@@ -1,42 +1,167 @@
 package com.cs407.brickcollector
 
+
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.cs407.brickcollector.api.LegoDatabase
 import com.cs407.brickcollector.ui.screens.BuyScreen
 import com.cs407.brickcollector.ui.screens.MySetsScreen
 import com.cs407.brickcollector.ui.screens.SellScreen
 import com.cs407.brickcollector.ui.screens.SettingsScreen
 import com.cs407.brickcollector.ui.screens.WantListScreen
+import com.cs407.location.uiScreens.qrCameraScreen
+import com.cs407.location.viewModels.callLocationVM
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 
 class MainActivity : ComponentActivity() {
+    private val vm: callLocationVM by viewModels()
+    private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // Check if database file exists in assets
+        try {
+            val assetFiles = assets.list("")
+            Log.d("LegoTest", "Files in assets: ${assetFiles?.joinToString()}")
+
+            val hasDb = assetFiles?.contains("lego_sets.db") ?: false
+            Log.d("LegoTest", "Database in assets: $hasDb")
+        } catch (e: Exception) {
+            Log.e("LegoTest", "Error checking assets: ${e.message}")
+        }
+
+        // Now try to access database
+        val legoDb = LegoDatabase.getInstance(this)
+        val set = legoDb.getSetByUPC("673419266192")
+        Log.d("LegoTest", "Found: ${set?.name ?: "Not found"}")
+
         setContent {
             AppNavigation()
         }
+
+        permissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { perms ->
+            val granted =
+                perms[android.Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                        perms[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+            vm.updatePermission(granted)
+
+            if (granted) {
+                // We have permission -> resolve city
+                lifecycleScope.launch {
+                    val city = vm.resolveCityAssumingPermission(
+                        appContext = applicationContext,
+                        geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
+                    )
+
+                    Log.d("CITY", "Resolved city: $city")
+                    Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Location permission denied",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        // 4) Initialize VM with context + API key
+        vm.initialize(applicationContext, BuildConfig.GEOAPIFY_API_KEY)
+
+        // 5) If no permission yet, ask. Otherwise go ahead and resolve.
+        if (!vm.hasLocationPermission(this)) {
+            permissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        } else {
+            vm.updatePermission(true)
+            lifecycleScope.launch {
+                val city = vm.resolveCityAssumingPermission(
+                    appContext = applicationContext,
+                    geoapifyApiKey = BuildConfig.GEOAPIFY_API_KEY
+                )
+                val Latlng = vm.fetchLatLngOnce()
+                Toast.makeText(this@MainActivity, "Latlng: $Latlng", Toast.LENGTH_SHORT).show()
+                Log.d("CITY", "Resolved city (already had perm): $city")
+                Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     }
 }
+
+    /*
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        // Call the example usage function
+        lifecycleScope.launch {
+            exampleUsage()
+        }
+
+        setContent {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Testing BrickEconomy API\nCheck Logcat for results",
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+    }
+}
+
+     */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,9 +191,12 @@ fun AppNavigation() {
                     },
                     actions = {
                         IconButton(onClick = {
-                            // TODO... handle the barcode
+                            navController.navigate("qrScanner")
                         }) {
-                            Icon(Icons.Default.Star, contentDescription = "Scan Barcode")
+                            Icon(
+                                imageVector = Icons.Filled.QrCodeScanner,
+                                contentDescription = "Scan Barcode"
+                            )
                         }
                     }
                 )
@@ -121,6 +249,37 @@ fun AppNavigation() {
                 SettingsScreen(
                     onBack = { navController.popBackStack() }
                 )
+            }
+            composable("qrScanner") {
+                val context = LocalContext.current
+                val scope = rememberCoroutineScope()
+
+                qrCameraScreen { scannedValue ->
+
+                    scope.launch {
+                        // 1) Get DB instance
+                        val legoDb = LegoDatabase.getInstance(context)
+
+                        // 2) Query DB on background thread
+                        val set = withContext(Dispatchers.IO) {
+                            legoDb.getSetByUPC(scannedValue)  // uses the UPC column
+                        }
+
+                        // 3) Build a message to show
+                        val msg = if (set != null) {
+                            "UPC: $scannedValue\nSet: ${set.setNumber} - ${set.name}"
+                        } else {
+                            "No set found for UPC $scannedValue"
+                        }
+
+                        // 4) Log + Toast for testing
+                        Log.d("QR-Lego", msg)
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+
+                        // 5) Go back to previous screen
+                        navController.popBackStack()
+                    }
+                }
             }
         }
     }
