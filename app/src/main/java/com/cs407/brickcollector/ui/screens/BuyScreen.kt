@@ -45,12 +45,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.cs407.brickcollector.BuildConfig
 import com.cs407.brickcollector.R
 import com.cs407.brickcollector.models.LegoSet
@@ -400,10 +402,11 @@ fun BuyScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Image on the left
-                            Image(
-                                painter = painterResource(id = getDrawableId(set.imageId)),
-                                contentDescription = set.name,
-                                modifier = Modifier.size(80.dp)
+                            AsyncImage(
+                                model = set.link,
+                                contentDescription = "LEGO Set Image",
+                                modifier = Modifier.size(60.dp),
+                                contentScale = ContentScale.Crop
                             )
 
                             Spacer(modifier = Modifier.width(16.dp))
@@ -595,6 +598,7 @@ private fun getDrawableId(imageNumber: Int): Int {
         2 -> R.drawable.image2
         3 -> R.drawable.image3
         4 -> R.drawable.image4
+
         else -> R.drawable.image1 // Default fallback
     }
 }

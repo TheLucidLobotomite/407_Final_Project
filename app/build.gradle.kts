@@ -106,6 +106,9 @@ dependencies {
     // Tests
     implementation("androidx.compose.material:material-icons-extended")
 
+    // Images
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
