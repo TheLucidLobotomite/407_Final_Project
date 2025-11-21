@@ -22,6 +22,7 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
+import com.cs407.brickcollector.ui.LoginPage
 import com.cs407.brickcollector.ui.screens.BuyScreen
 import com.cs407.brickcollector.ui.screens.MySetsScreen
 import com.cs407.brickcollector.ui.screens.SellScreen
@@ -94,9 +95,15 @@ fun AppNavigation() {
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = "my_sets",
+            startDestination = /*"my_sets"*/ "login",
             modifier = Modifier.padding(paddingValues)
         ) {
+            composable("login") {
+                LoginPage (
+                    modifier = Modifier,
+                    loginButtonClick = {navController.navigate("my_sets")}
+                )
+            }
             composable("my_sets") {
                 MySetsScreen(
                     onNavigateToSettings = { navController.navigate("settings") }
