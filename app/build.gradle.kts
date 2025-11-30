@@ -1,7 +1,12 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
 }
 
@@ -18,9 +23,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // GEOAPIFY key -> used by BuildConfig.GEOAPIFY_API_KEY in MainActivity
-        val geoKey = providers.gradleProperty("GEOAPIFY_API_KEY").orNull ?: "DEFAULT_GEOAPIFY"
-        buildConfigField("String", "GEOAPIFY_API_KEY", "\"$geoKey\"")
+        val secretsFile = rootProject.file("secrets.properties")
+        val secretsProps = Properties()
+        if (secretsFile.exists()) {
+            secretsFile.inputStream().use { secretsProps.load(it) }
+        }
+        val geoKey = secretsProps.getProperty("GEOAPIFY_API_KEY") ?: "DEFAULT_GEOAPIFY"
+        resValue("string", "geoapify_api_key", geoKey)
     }
 
     packaging {
@@ -60,10 +69,16 @@ configurations.all {
 
 secrets {
     // make sure this file exists at: app/secrets.properties
-    defaultPropertiesFileName = "secrets.properties"
+    propertiesFileName = "secrets.properties"
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.room.ktx)
     // Core + Compose
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -105,6 +120,9 @@ dependencies {
 
     // Tests
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Images
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

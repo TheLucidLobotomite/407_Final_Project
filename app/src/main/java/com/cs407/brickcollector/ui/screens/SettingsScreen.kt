@@ -1,5 +1,6 @@
 package com.cs407.brickcollector.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,36 +20,57 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cs407.brickcollector.R
 import com.cs407.brickcollector.api.ApiService
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import kotlinx.coroutines.launch
+import com.cs407.brickcollector.models.UserState
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onBack: () -> Unit = {}
+    currentUser: UserState?,
+    onBack: () -> Unit = {},
+    onLogout: () -> Unit = {},
+    onDeleteAccount: () -> Unit = {}
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
@@ -60,17 +82,30 @@ fun SettingsScreen(
 
     // Temporary state for editing
     var editedUsername by remember { mutableStateOf("") }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val profile = ApiService.getUserProfile()
+
+    var expanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
 
     // Fetch user profile on load
     LaunchedEffect(Unit) {
-        // TODO: Make this async when backend implements suspend functions
-        val profile = ApiService.getUserProfile()
-        username = profile.username
-        setsOwned = profile.setsOwned
-        setsListed = profile.setsListed
-        editedUsername = profile.username
-        isLoading = false
+        val firebaseUser = Firebase.auth.currentUser
+
+        if (firebaseUser == null) {
+            username = "Guest"
+            editedUsername = username
+        } else {
+        username = firebaseUser.displayName.toString()
+        editedUsername = username
+        }
+
+        isLoading = false;
+
     }
+
+
 
     Column(
         modifier = Modifier
@@ -98,24 +133,66 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-
-            IconButton(onClick = {
-                if (isEditing) {
-                    // Save changes
-                    if (ApiService.updateUserProfile(editedUsername)) {
-                        username = editedUsername
-                        isEditing = false
-                    }
-                } else {
-                    // Enter edit mode
-                    isEditing = true
-                }
-            }) {
+            IconButton(onClick = { expanded = !expanded }) {
                 Icon(
-                    Icons.Default.Edit,
-                    contentDescription = if (isEditing) "Save" else "Edit",
-                    tint = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.vert_description)
                 )
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = if (isEditing) "Save" else "Edit",
+                                tint = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        text =  { Text(if (isEditing) "Save" else "Edit") },
+                        onClick = {
+                            if (isEditing) {
+                                // Save changes
+                                if (ApiService.updateUserProfile(editedUsername)) {
+                                    username = editedUsername
+                                    isEditing = false
+                                }
+                            } else {
+                                // Enter edit mode
+                                isEditing = true
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.Logout,
+                                contentDescription = stringResource(R.string.logout_description)
+                            )
+                        },
+                        text = { Text(stringResource(R.string.logout_button)) },
+                        onClick = {
+                            Firebase.auth.signOut()
+                            expanded = false
+                            onLogout()
+                        }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.DeleteOutline,
+                                contentDescription = stringResource(R.string.del_acc_description)
+                            )
+                        },
+                        text = { Text(stringResource(R.string.del_acc_button)) },
+                        onClick = {
+                            expanded = false
+                            showDeleteConfirmDialog = true
+                        },
+                        colors = MenuDefaults.itemColors(
+                            textColor = Color.Red,
+                            leadingIconColor = Color.Red
+                        )
+                    )
+                }
             }
         }
 
@@ -228,7 +305,9 @@ fun SettingsScreen(
                             .height(120.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                                alpha = 0.3f
+                            )
                         )
                     ) {
                         Box(
@@ -253,7 +332,9 @@ fun SettingsScreen(
                             .height(120.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(
+                                alpha = 0.3f
+                            )
                         )
                     ) {
                         Box(
@@ -278,7 +359,9 @@ fun SettingsScreen(
                             .height(120.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(
+                                alpha = 0.3f
+                            )
                         )
                     ) {
                         Box(
@@ -329,7 +412,9 @@ fun SettingsScreen(
                             .height(120.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                                alpha = 0.3f
+                            )
                         )
                     ) {
                         Box(
@@ -354,7 +439,9 @@ fun SettingsScreen(
                             .height(120.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(
+                                alpha = 0.3f
+                            )
                         )
                     ) {
                         Box(
@@ -379,7 +466,9 @@ fun SettingsScreen(
                             .height(120.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(
+                                alpha = 0.3f
+                            )
                         )
                     ) {
                         Box(
@@ -443,8 +532,9 @@ fun SettingsScreen(
 
                         Button(
                             onClick = {
-                                ApiService.signOut()
-                                // TODO: Handle navigation to login screen
+                                Firebase.auth.signOut()
+                                onLogout()
+                                      // TODO: Handle navigation to login screen
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
@@ -457,5 +547,34 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteConfirmDialog = false
+            },
+            title = { Text("Delete Account") },
+            text = { Text("Are you sure you want to permanently delete your account? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDeleteAccount()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
