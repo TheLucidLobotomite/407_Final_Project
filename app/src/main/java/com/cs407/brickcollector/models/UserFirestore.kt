@@ -30,8 +30,10 @@ class UserFirestore {
             // Initialize mylist, wantlist and selllist as empty lists
             "mylist" to emptyList<LegoSet>(),
             "wantlist" to emptyList<LegoSet>(),
-            "selllist" to emptyList<LegoSet>()
-
+            "selllist" to emptyList<LegoSet>(),
+            // Initialize sales statistics
+            "setsSold" to 0,
+            "totalEarned" to 0.0
         )
 
         // Set the data in a document named after the user's UID
@@ -194,16 +196,35 @@ class UserFirestore {
         val sellerCity: String?
     )
 
-    fun getBuyList(onComplete: (List<MarketSellEntry>) -> Unit){
+    /**
+     * Get all items available for purchase (from OTHER users' sell lists)
+     *
+     * SCALABILITY NOTE: This current implementation loads ALL users.
+     * For production with many users, consider:
+     * 1. Using pagination (limit/offset queries)
+     * 2. Creating a separate "marketplace" collection with individual item documents
+     * 3. Implementing server-side search/filtering
+     *
+     * For now, this works fine for small to medium user bases (< 1000 users)
+     */
+    fun getBuyList(currentUserUid: String, onComplete: (List<MarketSellEntry>) -> Unit){
         firestore.collection("users")
             .get()
             .addOnSuccessListener { query ->
                 val result = mutableListOf<MarketSellEntry>()
                 Log.d(TAG, "getBuyList: found ${query.size()} user documents")
+
                 for(document in query.documents){
+                    val sellerUid = document.get("uid") as? String ?: ""
+
+                    // Skip the current user's items
+                    if (sellerUid == currentUserUid) {
+                        Log.d(TAG, "getBuyList: Skipping current user's items")
+                        continue
+                    }
+
                     val sellerCity = document.get("city") as? String
                     val sellList = document.get("selllist") as? List<HashMap<String, Any>>
-                    val sellerUid = document.get("uid") as? String ?: ""
 
                     if (sellList != null) {
                         for (map in sellList) {
@@ -211,7 +232,6 @@ class UserFirestore {
                                 name = map["name"] as? String ?: "No Name",
                                 setId = (map["setId"] as? Long)?.toInt() ?: -1,
                                 price = map["price"] as? Double ?: 0.0,
-
                                 imageUrl = map["imageUrl"] as? String ?: "No image"
                             )
                             result.add(
@@ -225,15 +245,15 @@ class UserFirestore {
                     }
                 }
 
+                Log.d(TAG, "getBuyList: Returning ${result.size} items for purchase")
                 onComplete(result)
 
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "getAllSellSetsWithCity: FAILED to read sell lists", e)
+                Log.e(TAG, "getBuyList: FAILED to read sell lists", e)
                 onComplete(emptyList())
             }
     }
-
 
     /**
      * Get sets from user's selllist from firestore
@@ -309,6 +329,68 @@ class UserFirestore {
             }
     }
 
+    /**
+     * Record a sale - increment setsSold and add to totalEarned
+     */
+    fun recordSale(userUid: String, salePrice: Double) {
+        firestore.collection("users").document(userUid)
+            .update(
+                mapOf(
+                    "setsSold" to FieldValue.increment(1),
+                    "totalEarned" to FieldValue.increment(salePrice)
+                )
+            )
+            .addOnSuccessListener {
+                Log.d(TAG, "Sale recorded: setsSold +1, totalEarned +$salePrice")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Error recording sale", e)
+            }
+    }
+
+    /**
+     * Data class to hold user statistics
+     */
+    data class UserStats(
+        val setsOwned: Int,
+        val setsSold: Int,
+        val totalEarned: Double
+    )
+
+    /**
+     * Get user statistics (sets owned, sets sold, total earned)
+     */
+    fun getUserStats(userUid: String, onComplete: (UserStats?) -> Unit) {
+        firestore.collection("users").document(userUid)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    // Get mylist count for sets owned
+                    val myList = document.get("mylist") as? List<*>
+                    val setsOwned = myList?.size ?: 0
+
+                    // Get sales statistics
+                    val setsSold = (document.get("setsSold") as? Long)?.toInt() ?: 0
+                    val totalEarned = document.get("totalEarned") as? Double ?: 0.0
+
+                    val stats = UserStats(
+                        setsOwned = setsOwned,
+                        setsSold = setsSold,
+                        totalEarned = totalEarned
+                    )
+
+                    Log.d(TAG, "Retrieved stats: $stats")
+                    onComplete(stats)
+                } else {
+                    Log.w(TAG, "User document does not exist")
+                    onComplete(null)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Error getting user stats", e)
+                onComplete(null)
+            }
+    }
 
     /**
      * Delete user from firestore

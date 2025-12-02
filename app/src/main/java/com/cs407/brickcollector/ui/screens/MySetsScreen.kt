@@ -1,6 +1,5 @@
 package com.cs407.brickcollector.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,6 +77,7 @@ fun MySetsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var itemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
+    var fullItemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -91,17 +91,16 @@ fun MySetsScreen(
     var priceMin by remember { mutableStateOf("") }
     var priceMax by remember { mutableStateOf("") }
 
-    // Load My Sets from Firestore
+    // Load My Sets from Firestore - only once
     LaunchedEffect(userState.uid) {
         if (userState.uid.isNotEmpty()) {
             isLoading = true
             userFirestore.getSetsFromMyList(userState.uid) { sets ->
-                itemList = sets ?: emptyList()
+                val loadedSets = sets ?: emptyList()
+                fullItemList = loadedSets
+                itemList = loadedSets
                 isLoading = false
-                android.util.Log.d("MySetsScreen", "Loaded ${itemList.size} sets from Firestore")
-                itemList.forEach { set ->
-                    android.util.Log.d("MySetsScreen", "Set: ${set.name} (ID: ${set.setId})")
-                }
+                android.util.Log.d("MySetsScreen", "Loaded ${loadedSets.size} sets from Firestore")
             }
         } else {
             isLoading = false
@@ -109,9 +108,7 @@ fun MySetsScreen(
     }
 
     fun applyFiltersAndSearch() {
-        isLoading = true
-
-        var results = itemList
+        var results = fullItemList
 
         if (activeSearchQuery.isNotBlank()) {
             results = results.filter { it.name.contains(activeSearchQuery, ignoreCase = true) }
@@ -126,7 +123,6 @@ fun MySetsScreen(
         }
 
         itemList = results
-        isLoading = false
         currentPage = 1
     }
 
@@ -459,48 +455,62 @@ fun MySetsScreen(
                     ) {
                         Button(
                             onClick = {
-                                val setToAdd = selectedSet
-                                if (setToAdd != null && userState.id != 0) {
-                                    listsViewModel.addSetToWantList(setToAdd)
-
+                                val setToMove = selectedSet
+                                if (setToMove != null && userState.id != 0) {
                                     coroutineScope.launch {
+                                        // Add to Want List
                                         withContext(Dispatchers.IO) {
-                                            userDatabase.legoDao().insertWantListSet(userState.id, setToAdd)
+                                            userDatabase.legoDao().insertWantListSet(userState.id, setToMove)
                                         }
-                                        userFirestore.addSetToWantList(userState.uid, setToAdd)
+                                        userFirestore.addSetToWantList(userState.uid, setToMove)
 
-                                        Toast.makeText(context, "Added to Want List", Toast.LENGTH_SHORT).show()
+                                        // Remove from My Sets
+                                        withContext(Dispatchers.IO) {
+                                            userDatabase.deleteDao().deleteFromMyList(listOf(setToMove.setId), userState.id)
+                                        }
+                                        userFirestore.removeSetFromMyList(userState.uid, setToMove)
+
+                                        // Update UI
+                                        fullItemList = fullItemList.filter { it.setId != setToMove.setId }
+                                        itemList = itemList.filter { it.setId != setToMove.setId }
+
+                                        selectedSet = null
                                     }
-
-                                    selectedSet = null
                                 }
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Add to Want List")
+                            Text("Move to Want List")
                         }
 
                         Button(
                             onClick = {
-                                val setToAdd = selectedSet
-                                if (setToAdd != null && userState.id != 0) {
-                                    listsViewModel.addSetToSellList(setToAdd)
-
+                                val setToMove = selectedSet
+                                if (setToMove != null && userState.id != 0) {
                                     coroutineScope.launch {
+                                        // Add to Sell List
                                         withContext(Dispatchers.IO) {
-                                            userDatabase.legoDao().insertSellListSet(userState.id, setToAdd)
+                                            userDatabase.legoDao().insertSellListSet(userState.id, setToMove)
                                         }
-                                        userFirestore.addSetToSellList(userState.uid, setToAdd)
+                                        userFirestore.addSetToSellList(userState.uid, setToMove)
 
-                                        Toast.makeText(context, "Added to Sell List", Toast.LENGTH_SHORT).show()
+                                        // Remove from My Sets
+                                        withContext(Dispatchers.IO) {
+                                            userDatabase.deleteDao().deleteFromMyList(listOf(setToMove.setId), userState.id)
+                                        }
+                                        userFirestore.removeSetFromMyList(userState.uid, setToMove)
+
+                                        // Update UI
+                                        fullItemList = fullItemList.filter { it.setId != setToMove.setId }
+                                        itemList = itemList.filter { it.setId != setToMove.setId }
+
+                                        selectedSet = null
                                     }
-
-                                    selectedSet = null
                                 }
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Add to Sell List")
+                            Text("Move to Sell List")
                         }
                     }
 
@@ -519,10 +529,10 @@ fun MySetsScreen(
                                     // Remove from Firestore
                                     userFirestore.removeSetFromMyList(userState.uid, setToRemove)
 
-                                    // Update UI
+                                    // Update both filtered and full lists
+                                    fullItemList = fullItemList.filter { it.setId != setToRemove.setId }
                                     itemList = itemList.filter { it.setId != setToRemove.setId }
 
-                                    Toast.makeText(context, "Removed from My Sets", Toast.LENGTH_SHORT).show()
                                     selectedSet = null
                                 }
                             }

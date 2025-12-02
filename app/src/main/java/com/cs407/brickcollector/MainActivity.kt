@@ -230,12 +230,14 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
             composable("buy") {
                 BuyScreen(
                     vm = vm,
-                    onNavigateToSettings = { navController.navigate("settings") }
+                    onNavigateToSettings = { navController.navigate("settings") },
+                    userViewModel = userViewModel
                 )
             }
             composable("sell") {
                 SellScreen(
-                    onNavigateToSettings = { navController.navigate("settings") }
+                    onNavigateToSettings = { navController.navigate("settings") },
+                    userViewModel = userViewModel
                 )
             }
             composable("settings") {

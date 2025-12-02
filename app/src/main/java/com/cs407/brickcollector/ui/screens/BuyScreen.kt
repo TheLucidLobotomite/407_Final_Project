@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,16 +55,20 @@ import coil.compose.AsyncImage
 import com.cs407.brickcollector.R
 import com.cs407.brickcollector.models.LegoSet
 import com.cs407.brickcollector.models.UserFirestore
+import com.cs407.brickcollector.models.UserViewModel
 import com.cs407.location.viewModels.LatlngToCity
 import com.cs407.location.viewModels.callLocationVM
 
 @Composable
 fun BuyScreen(
     vm: callLocationVM,
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    userViewModel: UserViewModel
 ) {
+    val userState by userViewModel.userState.collectAsState()
     var isLoading by remember { mutableStateOf(true) }
     var itemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
+    var fullItemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var activeSearchQuery by remember { mutableStateOf("") }
     var showFilterWidget by remember { mutableStateOf(false) }
@@ -83,24 +88,32 @@ fun BuyScreen(
 
     var marketItems by remember { mutableStateOf<List<UserFirestore.MarketSellEntry>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
-        userFirestore.getBuyList { entries ->
-            marketItems = entries
-            itemList = entries.map { it.set }.distinctBy { it.setId }
+    LaunchedEffect(userState.uid) {
+        if (userState.uid.isNotEmpty()) {
+            isLoading = true
+            // Pass the current user's UID so getBuyList can filter it out
+            userFirestore.getBuyList(userState.uid) { entries ->
+                // Items are already filtered in getBuyList
+                marketItems = entries
+                fullItemList = entries.map { it.set }.distinctBy { it.setId }
+                itemList = fullItemList
+                isLoading = false
+
+                Log.d("BuyScreen", "Loaded ${entries.size} items for purchase")
+            }
+            val userLatLng = vm.fetchLatLngOnce()
+            if (userLatLng != null) {
+                val userCityVM = LatlngToCity()
+                userCityVM.resolveAndStore(userLatLng, apiKey = geoKey)
+                userCity = userCityVM.cityCounty.value
+            }
+        } else {
             isLoading = false
-        }
-        val userLatLng = vm.fetchLatLngOnce()
-        if (userLatLng != null) {
-            val userCityVM = LatlngToCity()
-            userCityVM.resolveAndStore(userLatLng, apiKey = geoKey)
-            userCity = userCityVM.cityCounty.value
         }
     }
 
     fun applyFiltersAndSearch() {
-        isLoading = true
-
-        var filtered = itemList
+        var filtered = fullItemList
 
         if (activeSearchQuery.isNotBlank()) {
             filtered = filtered.filter { it.name.contains(activeSearchQuery, ignoreCase = true) }
@@ -115,7 +128,6 @@ fun BuyScreen(
         }
 
         itemList = filtered
-        isLoading = false
         currentPage = 1
     }
 
@@ -298,6 +310,21 @@ fun BuyScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
+                    }
+                }
+            } else if (itemList.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No sets available for purchase",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             } else {

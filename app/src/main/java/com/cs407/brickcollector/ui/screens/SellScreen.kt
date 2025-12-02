@@ -34,7 +34,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +76,7 @@ fun SellScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var itemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
+    var fullItemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -87,6 +87,7 @@ fun SellScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var addSearchQuery by remember { mutableStateOf("") }
     var mySetsItemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
+    var showConfirmSellDialog by remember { mutableStateOf(false) }
 
     val itemsPerPage = 7
     var currentPage by remember { mutableStateOf(1) }
@@ -94,31 +95,32 @@ fun SellScreen(
     var priceMin by remember { mutableStateOf("") }
     var priceMax by remember { mutableStateOf("") }
 
-    // Load Sell List from Firestore
+    // Load Sell List and My Sets from Firestore - only once
     LaunchedEffect(userState.uid) {
         if (userState.uid.isNotEmpty()) {
             isLoading = true
 
-            // Load Sell List
+            // Load Sell List - THIS USER'S sell list only
             userFirestore.getSetsFromSellList(userState.uid) { sets ->
-                itemList = sets ?: emptyList()
+                val loadedSets = sets ?: emptyList()
+                fullItemList = loadedSets
+                itemList = loadedSets
                 isLoading = false
+                Log.d("SellScreen", "Loaded ${loadedSets.size} sets in sell list")
             }
 
             // Also load My Sets for the add dialog
             userFirestore.getSetsFromMyList(userState.uid) { sets ->
                 mySetsItemList = sets ?: emptyList()
+                Log.d("SellScreen", "Loaded ${mySetsItemList.size} sets in my sets")
             }
         } else {
-            // No user logged in
             isLoading = false
         }
     }
 
     fun applyFiltersAndSearch() {
-        isLoading = true
-
-        var results = itemList
+        var results = fullItemList
 
         if (activeSearchQuery.isNotBlank()) {
             results = results.filter { it.name.contains(activeSearchQuery, ignoreCase = true) }
@@ -133,7 +135,6 @@ fun SellScreen(
         }
 
         itemList = results
-        isLoading = false
         currentPage = 1
     }
 
@@ -362,7 +363,7 @@ fun SellScreen(
                                 horizontalAlignment = Alignment.End
                             ) {
                                 Text(
-                                    text = "Current Price",
+                                    text = "Asking Price",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -473,40 +474,142 @@ fun SellScreen(
                     Text("Set ID: ${selectedSet!!.setId}", style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("Price: $${selectedSet!!.price}", style = MaterialTheme.typography.bodyLarge)
+                    Text("Asking Price: $${selectedSet!!.price}", style = MaterialTheme.typography.bodyLarge)
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    Button(
-                        onClick = {
-                            val setToRemove = selectedSet
-                            if (setToRemove != null && userState.id != 0) {
-                                coroutineScope.launch {
-                                    // Remove from Room database (SELL_LIST specifically)
-                                    withContext(Dispatchers.IO) {
-                                        userDatabase.deleteDao().deleteFromSellList(listOf(setToRemove.setId), userState.id)
-                                    }
-                                    // Remove from Firestore
-                                    userFirestore.removeSetFromSellList(userState.uid, setToRemove)
-
-                                    // Update UI
-                                    itemList = itemList.filter { it.setId != setToRemove.setId }
-
-                                    Toast.makeText(context, "Removed from Sell List", Toast.LENGTH_SHORT).show()
-                                    selectedSet = null
-                                }
-                            }
-                        },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Remove from Sell List")
+                        Button(
+                            onClick = {
+                                val setToSell = selectedSet
+                                if (setToSell != null && userState.id != 0) {
+                                    coroutineScope.launch {
+                                        // Remove from Room database (SELL_LIST, MY_LIST, and WANT_LIST)
+                                        withContext(Dispatchers.IO) {
+                                            userDatabase.deleteDao().deleteFromSellList(listOf(setToSell.setId), userState.id)
+                                            userDatabase.deleteDao().deleteFromMyList(listOf(setToSell.setId), userState.id)
+                                            userDatabase.deleteDao().deleteFromWantList(listOf(setToSell.setId), userState.id)
+                                        }
+
+                                        // Remove from Firestore (all lists)
+                                        userFirestore.removeSetFromSellList(userState.uid, setToSell)
+                                        userFirestore.removeSetFromMyList(userState.uid, setToSell)
+                                        userFirestore.removeSetFromWantList(userState.uid, setToSell)
+
+                                        // Record the sale (increment setsSold and totalEarned)
+                                        userFirestore.recordSale(userState.uid, setToSell.price)
+
+                                        // Update UI
+                                        fullItemList = fullItemList.filter { it.setId != setToSell.setId }
+                                        itemList = itemList.filter { it.setId != setToSell.setId }
+
+                                        Toast.makeText(context, "Set sold and removed from all lists", Toast.LENGTH_SHORT).show()
+                                        selectedSet = null
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Confirm Sell")
+                        }
+
+                        Button(
+                            onClick = {
+                                val setToMove = selectedSet
+                                if (setToMove != null && userState.id != 0) {
+                                    coroutineScope.launch {
+                                        // Add back to My Sets
+                                        withContext(Dispatchers.IO) {
+                                            userDatabase.legoDao().insertMyListSet(userState.id, setToMove)
+                                        }
+                                        userFirestore.addSetToMyList(userState.uid, setToMove)
+
+                                        // Remove from Sell List
+                                        withContext(Dispatchers.IO) {
+                                            userDatabase.deleteDao().deleteFromSellList(listOf(setToMove.setId), userState.id)
+                                        }
+                                        userFirestore.removeSetFromSellList(userState.uid, setToMove)
+
+                                        // Update UI
+                                        fullItemList = fullItemList.filter { it.setId != setToMove.setId }
+                                        itemList = itemList.filter { it.setId != setToMove.setId }
+
+                                        Toast.makeText(context, "Moved back to My Sets", Toast.LENGTH_SHORT).show()
+                                        selectedSet = null
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary
+                            )
+                        ) {
+                            Text("Remove from Sell")
+                        }
                     }
                 }
             }
         }
+    }
+
+    // Confirmation Dialog for Selling
+    if (showConfirmSellDialog && selectedSet != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showConfirmSellDialog = false },
+            title = { Text("Confirm Sale") },
+            text = {
+                Text("Are you sure you want to mark \"${selectedSet!!.name}\" as sold? This will permanently remove it from all your lists.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val setToSell = selectedSet
+                        if (setToSell != null && userState.id != 0) {
+                            coroutineScope.launch {
+                                // Remove from Room database (SELL_LIST, MY_LIST, and WANT_LIST)
+                                withContext(Dispatchers.IO) {
+                                    userDatabase.deleteDao().deleteFromSellList(listOf(setToSell.setId), userState.id)
+                                    userDatabase.deleteDao().deleteFromMyList(listOf(setToSell.setId), userState.id)
+                                    userDatabase.deleteDao().deleteFromWantList(listOf(setToSell.setId), userState.id)
+                                }
+
+                                // Remove from Firestore (all lists)
+                                userFirestore.removeSetFromSellList(userState.uid, setToSell)
+                                userFirestore.removeSetFromMyList(userState.uid, setToSell)
+                                userFirestore.removeSetFromWantList(userState.uid, setToSell)
+
+                                // Update UI
+                                fullItemList = fullItemList.filter { it.setId != setToSell.setId }
+                                itemList = itemList.filter { it.setId != setToSell.setId }
+
+                                android.widget.Toast.makeText(context, "Set marked as sold!", android.widget.Toast.LENGTH_SHORT).show()
+
+                                showConfirmSellDialog = false
+                                selectedSet = null
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Yes, Mark as Sold")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { showConfirmSellDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Add Set Dialog - Shows My Sets
@@ -613,83 +716,95 @@ fun SellScreen(
                             }
                         }
                     } else if (filteredMySets.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No sets match your search",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filteredMySets) { set ->
-                        ElevatedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    // Add to sell list
-                                    coroutineScope.launch {
-                                        withContext(Dispatchers.IO) {
-                                            userDatabase.legoDao().insertSellListSet(userState.id, set)
-                                        }
-                                        userFirestore.addSetToSellList(userState.uid, set)
-
-                                        itemList = itemList + set
-
-                                        Toast.makeText(context, "Added to Sell List", Toast.LENGTH_SHORT).show()
-                                        showAddDialog = false
-                                        addSearchQuery = ""
-                                    }
-                                },
-                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                AsyncImage(
-                                    model = set.imageUrl,
-                                    contentDescription = set.name,
-                                    modifier = Modifier.size(60.dp),
-                                    contentScale = ContentScale.Crop
-                                )
+                            Text(
+                                text = "No sets match your search",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(filteredMySets) { set ->
+                                ElevatedCard(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            // Add to sell list AND remove from my list
+                                            coroutineScope.launch {
+                                                // Add to Sell List
+                                                withContext(Dispatchers.IO) {
+                                                    userDatabase.legoDao().insertSellListSet(userState.id, set)
+                                                }
+                                                userFirestore.addSetToSellList(userState.uid, set)
 
-                                Spacer(modifier = Modifier.width(16.dp))
+                                                // Remove from My List
+                                                withContext(Dispatchers.IO) {
+                                                    userDatabase.deleteDao().deleteFromMyList(listOf(set.setId), userState.id)
+                                                }
+                                                userFirestore.removeSetFromMyList(userState.uid, set)
 
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = set.name,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Text(
-                                        text = "Set ID: ${set.setId}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                                // Update sell list UI
+                                                fullItemList = fullItemList + set
+                                                itemList = itemList + set
 
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "${set.price}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                                // Update my sets list UI
+                                                mySetsItemList = mySetsItemList.filter { it.setId != set.setId }
+
+                                                Toast.makeText(context, "Added to Sell List", Toast.LENGTH_SHORT).show()
+                                                showAddDialog = false
+                                                addSearchQuery = ""
+                                            }
+                                        },
+                                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AsyncImage(
+                                            model = set.imageUrl,
+                                            contentDescription = set.name,
+                                            modifier = Modifier.size(60.dp),
+                                            contentScale = ContentScale.Crop
+                                        )
+
+                                        Spacer(modifier = Modifier.width(16.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = set.name,
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = "Set ID: ${set.setId}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "$${set.price}",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-            }
         }
     }
-}
 }
