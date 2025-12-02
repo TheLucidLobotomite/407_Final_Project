@@ -195,18 +195,7 @@ class UserFirestore {
         val sellerUid: String,
         val sellerCity: String?
     )
-
-    /**
-     * Get all items available for purchase (from OTHER users' sell lists)
-     *
-     * SCALABILITY NOTE: This current implementation loads ALL users.
-     * For production with many users, consider:
-     * 1. Using pagination (limit/offset queries)
-     * 2. Creating a separate "marketplace" collection with individual item documents
-     * 3. Implementing server-side search/filtering
-     *
-     * For now, this works fine for small to medium user bases (< 1000 users)
-     */
+    
     fun getBuyList(currentUserUid: String, onComplete: (List<MarketSellEntry>) -> Unit){
         firestore.collection("users")
             .get()

@@ -1,5 +1,6 @@
 package com.cs407.brickcollector.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -117,6 +118,8 @@ fun SettingsScreen(
             }
         }
     }
+
+
 
     Column(
         modifier = Modifier
@@ -380,6 +383,35 @@ fun SettingsScreen(
         }
     }
 
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteConfirmDialog = false
+            },
+            title = { Text("Delete Account") },
+            text = { Text("Are you sure you want to permanently delete your account? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDeleteAccount()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
     if (showDeleteConfirmDialog) {
         AlertDialog(
             onDismissRequest = {

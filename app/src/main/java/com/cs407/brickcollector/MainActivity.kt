@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -112,6 +113,7 @@ class MainActivity : ComponentActivity() {
                     //Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
                 }
             } else {
+
                 Toast.makeText(
                     this@MainActivity,
                     "Location permission denied",
@@ -120,6 +122,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 4) Initialize VM with context + API key
         vm.initialize(applicationContext, geoKey)
 
         if (!vm.hasLocationPermission(this)) {
@@ -165,31 +168,45 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
 
     Scaffold(
         topBar = {
-            if (showBars) {
-                TopAppBar(
-                    title = { },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.navigate("settings") }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = {
-                            if (MainActivity.AppState.cameraOn) {
-                                MainActivity.AppState.cameraOn = false
-                                navController.popBackStack()
-                            } else {
-                                MainActivity.AppState.cameraOn = true
-                                navController.navigate("qrScanner")
+            when (currentRoute) {
+                // Show no default top bar (shows top bar from SettingsScreen
+                "settings" -> {}
+
+                // Show default top bar
+                else -> {
+                    TopAppBar(
+                        title = { },
+                        navigationIcon = {
+                            when(currentRoute) {
+                                "login" -> {}
+                                else -> {
+                                    IconButton(onClick = { navController.navigate("settings") }) {
+                                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                                    }
+                                }
                             }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.QrCodeScanner,
-                                contentDescription = "Scan Barcode"
-                            )
+
+                        },
+                        actions = {
+                            IconButton(onClick = {
+                                if (MainActivity.AppState.cameraOn) {
+                                    // Camera is on, turn it off by going back
+                                    MainActivity.AppState.cameraOn = false
+                                    navController.popBackStack()
+                                } else {
+                                    // Camera is off, turn it on by navigating to scanner
+                                    MainActivity.AppState.cameraOn = true
+                                    navController.navigate("qrScanner")
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Filled.QrCodeScanner,
+                                    contentDescription = "Scan Barcode"
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         },
         bottomBar = {
@@ -216,6 +233,7 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
                 )
             }
             composable("my_sets") {
+
                 MySetsScreen(
                     onNavigateToSettings = { navController.navigate("settings") },
                     userViewModel = userViewModel
@@ -360,6 +378,7 @@ fun BottomNavigationBar(
                         restoreState = true
                     }
                 }
+
             )
         }
     }
