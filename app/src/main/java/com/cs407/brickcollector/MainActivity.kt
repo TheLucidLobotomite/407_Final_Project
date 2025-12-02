@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
                     )
 
                     Log.d("CITY", "Resolved city: $city")
-                    Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
+                    //Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Toast.makeText(
@@ -137,9 +137,9 @@ class MainActivity : ComponentActivity() {
                     geoapifyApiKey = geoKey
                 )
                 val Latlng = vm.fetchLatLngOnce()
-                Toast.makeText(this@MainActivity, "Latlng: $Latlng", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(this@MainActivity, "Latlng: $Latlng", Toast.LENGTH_SHORT).show()
                 Log.d("CITY", "Resolved city (already had perm): $city")
-                Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
+                //Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
             }
         }
     }

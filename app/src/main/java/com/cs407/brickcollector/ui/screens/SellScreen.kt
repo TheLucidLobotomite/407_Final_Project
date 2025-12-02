@@ -1,7 +1,6 @@
 package com.cs407.brickcollector.ui.screens
 
 import android.util.Log
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -506,7 +505,6 @@ fun SellScreen(
                                         fullItemList = fullItemList.filter { it.setId != setToSell.setId }
                                         itemList = itemList.filter { it.setId != setToSell.setId }
 
-                                        Toast.makeText(context, "Set sold and removed from all lists", Toast.LENGTH_SHORT).show()
                                         selectedSet = null
                                     }
                                 }
@@ -540,7 +538,6 @@ fun SellScreen(
                                         fullItemList = fullItemList.filter { it.setId != setToMove.setId }
                                         itemList = itemList.filter { it.setId != setToMove.setId }
 
-                                        Toast.makeText(context, "Moved back to My Sets", Toast.LENGTH_SHORT).show()
                                         selectedSet = null
                                     }
                                 }
@@ -587,8 +584,6 @@ fun SellScreen(
                                 // Update UI
                                 fullItemList = fullItemList.filter { it.setId != setToSell.setId }
                                 itemList = itemList.filter { it.setId != setToSell.setId }
-
-                                android.widget.Toast.makeText(context, "Set marked as sold!", android.widget.Toast.LENGTH_SHORT).show()
 
                                 showConfirmSellDialog = false
                                 selectedSet = null
@@ -757,7 +752,6 @@ fun SellScreen(
                                                 // Update my sets list UI
                                                 mySetsItemList = mySetsItemList.filter { it.setId != set.setId }
 
-                                                Toast.makeText(context, "Added to Sell List", Toast.LENGTH_SHORT).show()
                                                 showAddDialog = false
                                                 addSearchQuery = ""
                                             }

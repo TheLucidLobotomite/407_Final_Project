@@ -1,6 +1,5 @@
 package com.cs407.brickcollector.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -458,7 +457,6 @@ fun WantListScreen(
                                         // Update UI
                                         itemList = itemList.filter { it.setId != setToMove.setId }
 
-                                        Toast.makeText(context, "Moved to My Sets", Toast.LENGTH_SHORT).show()
                                         selectedSet = null
                                     }
                                 }
@@ -483,7 +481,6 @@ fun WantListScreen(
                                         // Update UI
                                         itemList = itemList.filter { it.setId != setToRemove.setId }
 
-                                        Toast.makeText(context, "Removed from Want List", Toast.LENGTH_SHORT).show()
                                         selectedSet = null
                                     }
                                 }
@@ -630,7 +627,6 @@ fun WantListScreen(
 
                                                 android.util.Log.d("WantListScreen", "Added set: ${newSet.name} (ID: ${newSet.setId})")
 
-                                                Toast.makeText(context, "Added to Want List", Toast.LENGTH_SHORT).show()
                                                 showAddDialog = false
                                                 addSearchQuery = ""
                                                 searchResults = emptyList()

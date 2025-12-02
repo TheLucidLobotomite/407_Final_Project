@@ -1,6 +1,5 @@
 package com.cs407.brickcollector.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
