@@ -510,41 +510,6 @@ fun SettingsScreen(
                         }
                     }
                 }
-
-                // Bottom Buttons inside LazyColumn
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                ApiService.switchAccount()
-                                // TODO: Handle navigation after switch
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Switch Account")
-                        }
-
-                        Button(
-                            onClick = {
-                                Firebase.auth.signOut()
-                                onLogout()
-                                      // TODO: Handle navigation to login screen
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Text("Sign Out")
-                        }
-                    }
-                }
             }
         }
     }

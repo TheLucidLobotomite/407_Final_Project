@@ -1,8 +1,6 @@
 package com.cs407.brickcollector.ui.screens
 
 import android.util.Log
-import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +35,7 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,14 +46,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.cs407.brickcollector.R
-import com.cs407.brickcollector.api.ApiService
 import com.cs407.brickcollector.models.LegoSet
 import com.cs407.brickcollector.models.UserFirestore
 import com.cs407.location.viewModels.LatlngToCity
@@ -65,9 +62,6 @@ fun BuyScreen(
     vm: callLocationVM,
     onNavigateToSettings: () -> Unit = {}
 ) {
-
-    // State for the list of sets available for purchase - fetched from API
-//    var itemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var itemList by remember { mutableStateOf<List<LegoSet>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -78,31 +72,19 @@ fun BuyScreen(
     val geoKey = remember { context.getString(R.string.geoapify_api_key) }
 
     var userCity by remember { mutableStateOf<String?>(null) }
-    var firestoreCity by remember { mutableStateOf<String?>(null) }
 
-    // Pagination variables
     val itemsPerPage = 7
     var currentPage by remember { mutableStateOf(1) }
-    // Filter state variables
+
     var priceMin by remember { mutableStateOf("") }
     var priceMax by remember { mutableStateOf("") }
-    var starWarsChecked by remember { mutableStateOf(false) }
-    var indianaJonesChecked by remember { mutableStateOf(false) }
-    var harryPotterChecked by remember { mutableStateOf(false) }
-    var marvelChecked by remember { mutableStateOf(false) }
+
     val userFirestore = UserFirestore()
-//    var allCities by remember { mutableStateOf<List<String>>(emptyList()) }
 
     var marketItems by remember { mutableStateOf<List<UserFirestore.MarketSellEntry>>(emptyList()) }
-    //hardcoded test for future buy
-    //TODO: Remove once user database working hardcoded for now look at changes
+
     LaunchedEffect(Unit) {
         userFirestore.getBuyList { entries ->
-            Toast.makeText(
-                               context,
-                               "Loaded ${entries.size} sell entries",
-                               Toast.LENGTH_SHORT
-                                   ).show()
             marketItems = entries
             itemList = entries.map { it.set }.distinctBy { it.setId }
             isLoading = false
@@ -115,70 +97,60 @@ fun BuyScreen(
         }
     }
 
-    // Function to apply filters and search
     fun applyFiltersAndSearch() {
         isLoading = true
 
-        // Build genre list
-        val genres = mutableListOf<String>()
-        if (starWarsChecked) genres.add("Star Wars")
-        if (indianaJonesChecked) genres.add("Indiana Jones")
-        if (harryPotterChecked) genres.add("Harry Potter")
-        if (marvelChecked) genres.add("Marvel")
+        var filtered = itemList
 
-        // Convert price strings to doubles
-        val minPrice = priceMin.toDoubleOrNull()
-        val maxPrice = priceMax.toDoubleOrNull()
+        if (activeSearchQuery.isNotBlank()) {
+            filtered = filtered.filter { it.name.contains(activeSearchQuery, ignoreCase = true) }
+        }
 
-        // Call API with all filters
-         // TODO: Make this async when backend implements suspend functions
-        itemList = ApiService.searchAvailableForPurchase(
-            searchQuery = activeSearchQuery,
-            priceMin = minPrice,
-            priceMax = maxPrice,
-            genres = genres
-        )
+        priceMin.toDoubleOrNull()?.let { min ->
+            filtered = filtered.filter { it.price >= min }
+        }
 
+        priceMax.toDoubleOrNull()?.let { max ->
+            filtered = filtered.filter { it.price <= max }
+        }
+
+        itemList = filtered
         isLoading = false
-        currentPage = 1 // Reset to first page after filtering
+        currentPage = 1
     }
+
     val combinedList = remember(itemList, marketItems, userCity) {
+        val flat = mutableListOf<Pair<LegoSet, String?>>()
 
-                val flat = mutableListOf<Pair<LegoSet, String?>>()
+        for (set in itemList) {
+            val sellersForSet = marketItems.filter { it.set.setId == set.setId }
 
-                for (set in itemList) {
-                        val sellersForSet = marketItems.filter { it.set.setId == set.setId }
-
-                        if (sellersForSet.isEmpty()) {
-                                // No seller found in Firestore; we can still show the set with no city
-                               flat.add(set to null)
-                            } else {
-                                // One row per seller of this set
-                                sellersForSet.forEach { entry ->
-                                        flat.add(entry.set to entry.sellerCity)
-                                    }
-                            }
-                    }
-
-                if (userCity == null) {
-                       flat
-                    } else {
-                        flat.sortedByDescending { (_, sellerCity) ->
-                                sellerCity != null && sellerCity.equals(userCity, ignoreCase = true)
-                            }
-                    }
+            if (sellersForSet.isEmpty()) {
+                flat.add(set to null)
+            } else {
+                sellersForSet.forEach { entry ->
+                    flat.add(entry.set to entry.sellerCity)
+                }
             }
-    // Calculate pagination values
+        }
+
+        if (userCity == null) {
+            flat
+        } else {
+            flat.sortedByDescending { (_, sellerCity) ->
+                sellerCity != null && sellerCity.equals(userCity, ignoreCase = true)
+            }
+        }
+    }
+
     val totalPages = remember(combinedList, itemsPerPage) {
         ((combinedList.size + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
     }
 
-    // Reset to page 1 if current page exceeds total pages
     if (currentPage > totalPages) {
         currentPage = 1
     }
 
-    // Get items for current page
     val paginatedList = remember(combinedList, currentPage, itemsPerPage) {
         val startIndex = (currentPage - 1) * itemsPerPage
         val endIndex = (startIndex + itemsPerPage).coerceAtMost(combinedList.size)
@@ -194,7 +166,6 @@ fun BuyScreen(
             .fillMaxSize()
             .padding(start = 16.dp, end = 16.dp, top = 16.dp)
     ) {
-        // Top Bar with Search Bar and Toggle Button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -245,12 +216,10 @@ fun BuyScreen(
             }
         }
 
-        // LazyColumn with containers
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Filter Results Widget at the top (only when toggle is on)
             if (showFilterWidget) {
                 item {
                     ElevatedCard(
@@ -271,7 +240,6 @@ fun BuyScreen(
 
                             HorizontalDivider()
 
-                            // Price Min
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -291,7 +259,6 @@ fun BuyScreen(
                                 )
                             }
 
-                            // Price Max
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -311,76 +278,6 @@ fun BuyScreen(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = "Genres",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-
-                            // Checkboxes for genres
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = starWarsChecked,
-                                    onCheckedChange = { starWarsChecked = it }
-                                )
-                                Text(
-                                    text = "Star Wars",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = indianaJonesChecked,
-                                    onCheckedChange = { indianaJonesChecked = it }
-                                )
-                                Text(
-                                    text = "Indiana Jones",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = harryPotterChecked,
-                                    onCheckedChange = { harryPotterChecked = it }
-                                )
-                                Text(
-                                    text = "Harry Potter",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = marvelChecked,
-                                    onCheckedChange = { marvelChecked = it }
-                                )
-                                Text(
-                                    text = "Marvel",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-
-                            // Apply Filters Button
                             Button(
                                 onClick = { applyFiltersAndSearch() },
                                 modifier = Modifier.fillMaxWidth()
@@ -392,7 +289,6 @@ fun BuyScreen(
                 }
             }
 
-            // Show loading or items
             if (isLoading) {
                 item {
                     Box(
@@ -401,11 +297,11 @@ fun BuyScreen(
                             .padding(32.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Loading...")
+                        CircularProgressIndicator()
                     }
                 }
             } else {
-                itemsIndexed(paginatedList) { index,pair ->
+                itemsIndexed(paginatedList) { index, pair ->
                     val (set, cityForCard) = pair
 
                     ElevatedCard(
@@ -421,7 +317,6 @@ fun BuyScreen(
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Image on the left
                             AsyncImage(
                                 model = set.imageUrl,
                                 contentDescription = "LEGO Set Image",
@@ -431,14 +326,12 @@ fun BuyScreen(
 
                             Spacer(modifier = Modifier.width(16.dp))
 
-                            // Set name
                             Text(
                                 text = set.name,
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // Price on the far right
                             Column(
                                 horizontalAlignment = Alignment.End
                             ) {
@@ -452,7 +345,7 @@ fun BuyScreen(
 
                                 Text(
                                     text = if (cityForCard != null)
-                                        "Seller city:  $cityForCard"
+                                        "Seller city: $cityForCard"
                                     else
                                         "Seller: No city",
                                     style = MaterialTheme.typography.bodyMedium
@@ -471,7 +364,6 @@ fun BuyScreen(
                 }
             }
 
-            // Pagination Controls - scrollable at the bottom
             if (totalPages > 1) {
                 item {
                     Row(
@@ -481,24 +373,15 @@ fun BuyScreen(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Back arrow
                         IconButton(
                             onClick = { currentPage-- },
                             enabled = currentPage > 1
                         ) {
-                            Icon(
-                                painter = painterResource(id = android.R.drawable.ic_media_previous),
-                                contentDescription = "Previous Page",
-                                tint = if (currentPage > 1)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            )
+                            Text("<")
                         }
 
                         Spacer(modifier = Modifier.width(16.dp))
 
-                        // Page indicator
                         Text(
                             text = "Page $currentPage/$totalPages",
                             style = MaterialTheme.typography.bodyLarge
@@ -506,19 +389,11 @@ fun BuyScreen(
 
                         Spacer(modifier = Modifier.width(16.dp))
 
-                        // Forward arrow
                         IconButton(
                             onClick = { currentPage++ },
                             enabled = currentPage < totalPages
                         ) {
-                            Icon(
-                                painter = painterResource(id = android.R.drawable.ic_media_next),
-                                contentDescription = "Next Page",
-                                tint = if (currentPage < totalPages)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            )
+                            Text(">")
                         }
                     }
                 }
@@ -526,7 +401,6 @@ fun BuyScreen(
         }
     }
 
-    // Popup Dialog when a set is selected
     if (selectedSet != null) {
         Dialog(
             onDismissRequest = { selectedSet = null },
@@ -544,13 +418,11 @@ fun BuyScreen(
                         .fillMaxWidth()
                         .padding(24.dp)
                 ) {
-                    // Header with X button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Same row as the list item
                         Row(
                             modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically
@@ -571,7 +443,6 @@ fun BuyScreen(
                             )
                         }
 
-                        // Close button
                         IconButton(onClick = { selectedSet = null }) {
                             Icon(
                                 Icons.Default.Close,
@@ -585,21 +456,13 @@ fun BuyScreen(
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Seller information
-                    Text("Seller: User123", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Condition: New in Box", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Location: Madison, WI", style = MaterialTheme.typography.bodyLarge)
+                    Text("Set ID: ${selectedSet!!.setId}", style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text("Asking Price: $${selectedSet!!.price}", style = MaterialTheme.typography.bodyLarge)
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Contact Seller Button
                     Button(
                         onClick = { /* TODO: Contact seller logic */ },
                         modifier = Modifier.fillMaxWidth()
@@ -609,17 +472,5 @@ fun BuyScreen(
                 }
             }
         }
-    }
-}
-
-// Helper function to get drawable resource ID
-private fun getDrawableId(imageNumber: Int): Int {
-    return when (imageNumber) {
-        1 -> R.drawable.image1
-        2 -> R.drawable.image2
-        3 -> R.drawable.image3
-        4 -> R.drawable.image4
-
-        else -> R.drawable.image1 // Default fallback
     }
 }

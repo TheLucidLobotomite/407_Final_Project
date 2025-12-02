@@ -71,16 +71,14 @@ class UserFirestore {
                 onComplete(null)
             }
     }
+
     fun getAllCities(onComplete: (List<String>) -> Unit) {
         firestore.collection("users")
             .get()
             .addOnSuccessListener { query ->
-                // How many docs did we get?
-
                 val cities = mutableListOf<String>()
 
                 for (document in query.documents) {
-                    val data = document.data
                     val cityAny = document.get("city")
 
                     if (cityAny is String && cityAny.isNotBlank()) {
@@ -134,9 +132,9 @@ class UserFirestore {
             .get()
             .addOnSuccessListener { document ->
                 if (document != null && document.exists()) {
-                    val wantList = document.get("mylist") as? List<HashMap<String, Any>>
-                    if (wantList != null) {
-                        val legoSets = wantList.map { map ->
+                    val myList = document.get("mylist") as? List<HashMap<String, Any>>
+                    if (myList != null) {
+                        val legoSets = myList.map { map ->
                             LegoSet(
                                 name = map["name"] as? String ?: "No Name",
                                 setId = (map["setId"] as? Long)?.toInt() ?: -1,
@@ -189,6 +187,7 @@ class UserFirestore {
                 onComplete(null)
             }
     }
+
     data class MarketSellEntry(
         val set: LegoSet,
         val sellerUid: String,
@@ -265,6 +264,20 @@ class UserFirestore {
             .addOnFailureListener {e ->
                 Log.w(TAG, "Error getting selllist", e)
                 onComplete(null)
+            }
+    }
+
+    /**
+     * Remove set from user's mylist in firestore
+     */
+    fun removeSetFromMyList(userUid: String, set: LegoSet) {
+        firestore.collection("users").document(userUid)
+            .update("mylist", FieldValue.arrayRemove(set))
+            .addOnSuccessListener {
+                Log.d(TAG, "Set removed from mylist")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Error removing set from mylist", e)
             }
     }
 

@@ -1,5 +1,5 @@
 package com.cs407.brickcollector
-//43 , -89.4
+
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -74,8 +73,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val geoKey = getString(R.string.geoapify_api_key)
 
-
-        // Check if database file exists in assets
+        // Initialize database
         try {
             val assetFiles = assets.list("")
             Log.d("LegoTest", "Files in assets: ${assetFiles?.joinToString()}")
@@ -86,7 +84,6 @@ class MainActivity : ComponentActivity() {
             Log.e("LegoTest", "Error checking assets: ${e.message}")
         }
 
-        // Now try to access database
         val legoDb = LegoDatabase.getInstance(this)
         val set = legoDb.getSetByUPC("673419266192")
         Log.d("LegoTest", "Found: ${set?.name ?: "Not found"}")
@@ -105,7 +102,6 @@ class MainActivity : ComponentActivity() {
             vm.updatePermission(granted)
 
             if (granted) {
-                // We have permission -> resolve city
                 lifecycleScope.launch {
                     val city = vm.resolveCityAssumingPermission(
                         appContext = applicationContext,
@@ -116,7 +112,6 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
                 }
             } else {
-
                 Toast.makeText(
                     this@MainActivity,
                     "Location permission denied",
@@ -125,10 +120,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // 4) Initialize VM with context + API key
         vm.initialize(applicationContext, geoKey)
 
-        // 5) If no permission yet, ask. Otherwise go ahead and resolve.
         if (!vm.hasLocationPermission(this)) {
             permissionLauncher.launch(
                 arrayOf(
@@ -149,36 +142,8 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this@MainActivity, "City: $city", Toast.LENGTH_SHORT).show()
             }
         }
-
     }
 }
-
-    /*
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        // Call the example usage function
-        lifecycleScope.launch {
-            exampleUsage()
-        }
-
-        setContent {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Testing BrickEconomy API\nCheck Logcat for results",
-                    fontSize = 20.sp,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-        }
-    }
-}
-
-     */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -195,50 +160,36 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
         BottomNavItem("sell", "Sell", Icons.Default.Share)
     )
 
-    val showBars = currentRoute != "settings"
+    // Only show navigation bars when logged in and not on login/settings
+    val showBars = currentRoute != "settings" && currentRoute != "login"
 
     Scaffold(
         topBar = {
-            when (currentRoute) {
-                // Show no default top bar (shows top bar from SettingsScreen
-
-                "settings" -> {}
-
-                // Show default top bar
-                else -> {
-                    TopAppBar(
-                        title = { },
-                        navigationIcon = {
-                            when(currentRoute) {
-                                "login" -> {}
-                                else -> {
-                                    IconButton(onClick = { navController.navigate("settings") }) {
-                                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                                    }
-                                }
-                            }
-
-                        },
-                        actions = {
-                            IconButton(onClick = {
-                                if (MainActivity.AppState.cameraOn) {
-                                    // Camera is on, turn it off by going back
-                                    MainActivity.AppState.cameraOn = false
-                                    navController.popBackStack()
-                                } else {
-                                    // Camera is off, turn it on by navigating to scanner
-                                    MainActivity.AppState.cameraOn = true
-                                    navController.navigate("qrScanner")
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Filled.QrCodeScanner,
-                                    contentDescription = "Scan Barcode"
-                                )
-                            }
+            if (showBars) {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.navigate("settings") }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
-                    )
-                }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            if (MainActivity.AppState.cameraOn) {
+                                MainActivity.AppState.cameraOn = false
+                                navController.popBackStack()
+                            } else {
+                                MainActivity.AppState.cameraOn = true
+                                navController.navigate("qrScanner")
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Filled.QrCodeScanner,
+                                contentDescription = "Scan Barcode"
+                            )
+                        }
+                    }
+                )
             }
         },
         bottomBar = {
@@ -249,29 +200,31 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = /*"my_sets"*/ "login",
+            startDestination = "login",
             modifier = Modifier.padding(paddingValues)
         ) {
             composable("login") {
-                LoginPage (
+                LoginPage(
                     modifier = Modifier,
                     loginButtonClick = { userState ->
                         currentUser = userState
                         userViewModel.setUser(userState)
-                        navController.navigate("my_sets")}
+                        navController.navigate("my_sets") {
+                            popUpTo("login") { inclusive = true }
+                        }
+                    }
                 )
             }
             composable("my_sets") {
-
                 MySetsScreen(
                     onNavigateToSettings = { navController.navigate("settings") },
                     userViewModel = userViewModel
-
                 )
             }
             composable("want_list") {
                 WantListScreen(
-                    onNavigateToSettings = { navController.navigate("settings") }
+                    onNavigateToSettings = { navController.navigate("settings") },
+                    userViewModel = userViewModel
                 )
             }
             composable("buy") {
@@ -295,16 +248,9 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
                     currentUser = currentUser,
                     onBack = { navController.popBackStack() },
                     onLogout = {
-                        // 1) Sign out from Firebase (stops auto-login)
                         FirebaseAuth.getInstance().signOut()
-
-                        // 2) Clear the app-level user state
                         currentUser = null
-
-                        // 3) Make sure camera is off (just in case)
                         MainActivity.AppState.cameraOn = false
-
-                        // 4) Navigate to login and clear back stack
                         navController.navigate("login") {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 inclusive = true
@@ -320,11 +266,8 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
                             val id = currentUser?.id
 
                             scope.launch {
-
-                                // Delete user data from Firestore
                                 userFirestore.removeUser(uid)
 
-                                // Delete user from room database
                                 if (id != null) {
                                     withContext(Dispatchers.IO) {
                                         db.deleteDao().deleteUser(id)
@@ -333,13 +276,9 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
 
                                 user.delete()
                                     .addOnSuccessListener {
-                                        Log.d(
-                                            "DeleteAccount",
-                                            "Firebase Auth user deleted successfully."
-                                        )
+                                        Log.d("DeleteAccount", "Firebase Auth user deleted successfully.")
                                     }
 
-                                // Show success message
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(
                                         context,
@@ -348,7 +287,6 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
                                     ).show()
                                 }
 
-                                // Navigate to login and clear the back stack
                                 navController.navigate("login") {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         inclusive = true
@@ -365,28 +303,22 @@ fun AppNavigation(vm: callLocationVM, userViewModel: UserViewModel = viewModel()
                 val scope = rememberCoroutineScope()
 
                 qrCameraScreen { scannedValue ->
-
                     scope.launch {
-                        // 1) Get DB instance
                         val legoDb = LegoDatabase.getInstance(context)
 
-                        // 2) Query DB on background thread
                         val set = withContext(Dispatchers.IO) {
-                            legoDb.getSetByUPC(scannedValue)  // uses the UPC column
+                            legoDb.getSetByUPC(scannedValue)
                         }
 
-                        // 3) Build a message to show
                         val msg = if (set != null) {
                             "UPC: $scannedValue\nSet: ${set.setNumber} - ${set.name}"
                         } else {
                             "No set found for UPC $scannedValue"
                         }
 
-                        // 4) Log + Toast for testing
                         Log.d("QR-Lego", msg)
                         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
 
-                        // 5) Go back to previous screen
                         MainActivity.AppState.cameraOn = false
                         navController.popBackStack()
                     }
@@ -413,13 +345,11 @@ fun BottomNavigationBar(
                 label = { Text(item.label) },
                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
                 onClick = {
-                    // If camera is on, turn it off and pop back first
                     if (MainActivity.AppState.cameraOn) {
                         MainActivity.AppState.cameraOn = false
                         navController.popBackStack()
                     }
 
-                    // Then navigate to the selected item
                     navController.navigate(item.route) {
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
@@ -428,7 +358,6 @@ fun BottomNavigationBar(
                         restoreState = true
                     }
                 }
-
             )
         }
     }
